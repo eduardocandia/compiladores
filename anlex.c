@@ -1,16 +1,12 @@
 /*
- *	Analizador Léxico	
- *	Curso: Compiladores y Lenguajes de Bajo de Nivel
- *	Práctica de Programación Nro. 1
- *	
- *	Descripcion:
- *	Implementa un analizador léxico que reconoce números, identificadores, 
- * 	palabras reservadas, operadores y signos de puntuación para un lenguaje
- * 	con sintaxis tipo Pascal.
- *	
+ *	TAREA 1 Analizador lexico		
+ *  Integrantes:
+ *        - Eduardo Candia                                                  
+ *        - Eva Rojas
+ *	Implementar un analizador lÃ©xico que reconozca la gramatica de una calculadora
  */
 
-/*********** LIbrerias utilizadas **************/
+/*********** Librerias utilizadas **************/
 
 #include<stdio.h>
 #include<string.h>
@@ -87,9 +83,11 @@ int consumir;			/* 1 indica al analizador lexico que debe devolver
 
 char cad[5*TAMLEX];		// string utilizado para cargar mensajes de error
 token t;				// token global para recibir componentes del Analizador Lexico
+char *vartoken;           
+float result;           
 
 // variables para el analizador lexico
-
+char c=0;
 FILE *archivo;			// Fuente pascal
 char buff[2*TAMBUFF];	// Buffer para lectura de archivo fuente
 char id[TAMLEX];		// Utilizado por el analizador lexico
@@ -98,27 +96,11 @@ int fin=0;				// Utilizado por el analizador lexico
 int numLinea=1;			// Numero de Linea
 
 /************** Prototipos *********************/
+int sigLex();		// Del analizador Lexico
 
-
-void sigLex();		// Del analizador Lexico
-
-/**************** Funciones **********************/
-int stricmp(const char* cad,const char* cad2) 
-{
-	int i;
-	char c1[strlen(cad)];
-	char c2[strlen(cad2)];
-	
-	strcpy(c1,cad);
-	strcpy(c2,cad2);
-	for(i=0;i<strlen(c1);i++)
-		c1[i]=tolower(c1[i]);
-
-	for(i=0;i<strlen(c2);i++)
-		c2[i]=tolower(c2[i]);
-
-	return strcmp(c1,c2);
-}
+float expresion();  
+float term();      
+float factor();    
 
 /*********************HASH************************/
 entrada *tabla;				//declarar la tabla de simbolos
@@ -140,7 +122,7 @@ int h(const char* k, int m)
 	return h%m;
 }
 void insertar(entrada e);
-
+/******Inicializa la tabla******/
 void initTabla()
 {	
 	int i=0;
@@ -170,7 +152,7 @@ int siguiente_primo(int n)
 	return n;
 }
 
-//en caso de que la tabla llegue al limite, duplicar el tamaño
+//En caso de que la tabla llegue al limite, duplicar el tamaÃ±o
 void rehash()
 {
 	entrada *vieja;
@@ -186,7 +168,7 @@ void rehash()
 	free(vieja);
 }
 
-//insertar una entrada en la tabla
+//Insertar una entrada en la tabla
 void insertar(entrada e)
 {
 	int pos;
@@ -202,7 +184,7 @@ void insertar(entrada e)
 	tabla[pos]=e;
 
 }
-//busca una clave en la tabla, si no existe devuelve NULL, posicion en caso contrario
+//Busca una clave en la tabla, si no existe devuelve NULL, posicion en caso contrario
 entrada* buscar(const char *clave)
 {
 	int pos;
@@ -290,17 +272,17 @@ void initTablaSimbolos()
 	insertTablaSimbolos(":=",OPASIGNA);
 }
 
-// Rutinas del analizador lexico
+/****** Rutinas del analizador lexico ******/
 
 void error(const char* mensaje)
 {
 	printf("Lin %d: Error Lexico. %s.\n",numLinea,mensaje);	
 }
 
-void sigLex()
+int sigLex()
 {
 	int i=0, longid=0;
-	char c=0;
+
 	int acepto=0;
 	int estado=0;
 	char msg[41];
@@ -326,7 +308,7 @@ void sigLex()
 				i++;
 				c=fgetc(archivo);
 				if (i>=TAMLEX)
-					error("Longitud de Identificador excede tamaño de buffer");
+					error("Longitud de Identificador excede tamaÃ±o de buffer");
 			}while(isalpha(c) || isdigit(c));
 			id[i]='\0';
 			if (c!=EOF)
@@ -544,9 +526,27 @@ void sigLex()
 		}
 		else if (c=='/')
 		{
-			t.compLex=OPMULT;
-			t.pe=buscar("/");
-			break;
+		  //verificamos si es comentario 		   
+          c=fgetc(archivo);	
+            if (c=='/') 
+            {
+               while(c!=EOF)
+			   {
+                     c=fgetc(archivo); 
+                     if(c=='\n'){
+                       ungetc(c,archivo);    
+                       break; 
+                     }        
+                }    
+                            
+            }
+            else{// verifica que sea un operador
+               ungetc(c,archivo); 	
+               t.compLex=OPMULT;
+			   t.pe=buscar("/");
+               break;
+			   
+			}
 		}
 		else if (c=='=')
 		{
@@ -695,14 +695,90 @@ void sigLex()
 		sprintf(e.lexema,"EOF");
 		t.pe=&e;
 	}
-	
+	return c;
 }
-
+//sacar error
+void msgerror(void)
+{
+     fprintf(stderr,"Error al evaluar\n");
+     system("pause");
+     exit(1);
+}     
+//comparar cuando es un operador 
+void match(char expectedToken)
+{    
+     if(vartoken[0]==expectedToken){
+        sigLex();
+        vartoken=t.pe->lexema;
+        printf("Lin %d: %s -> %d\n",numLinea,t.pe->lexema,t.compLex);
+     }
+     else msgerror();
+}
+//realizar suma o resta de terminos
+float expresion(){
+    float temp=term();
+    while(vartoken[0]=='+' || vartoken[0]=='-'){
+         if(vartoken[0]=='+')
+         {
+              match('+');
+              temp+=term();
+         }
+         else 
+         {
+             match('-');
+             temp-=term();
+         } 
+    }
+      return temp;
+}
+//comparar y realizar producto 0 cociente de factores
+float term()
+{
+    float temp=factor();
+    while(vartoken[0]=='*' || vartoken[0]=='/'){
+       if(vartoken[0]=='*')
+         {
+              match('*');
+              temp*=term();
+         }
+         else 
+         {
+             match('/');
+             temp/=term();
+         } 
+    }
+    return temp;
+}
+// verificar parentesis/numero
+float factor()
+{
+    int f;
+    char *aux;
+    float temp;
+    if (vartoken[0]=='(')
+    {
+       match('(');
+       temp=expresion();
+       match(')');
+    }
+    else if(isdigit(vartoken[0])){
+         temp=atof(vartoken);
+         sigLex();
+         vartoken=t.pe->lexema; 
+         printf("Lin %d: %s -> %d\n",numLinea,t.pe->lexema,t.compLex);
+    }
+    else{ 
+          msgerror();
+    }
+    return temp;
+}
+                    
 int main(int argc,char* args[])
 {
-	// inicializar analizador lexico
-	int complex=0;
-
+	// Inicializar variables para el analizador lexico y el evaluador de expresiones
+	int complex,i=0;
+	i=1;
+	float ver;
 	initTabla();
 	initTablaSimbolos();
 	
@@ -710,18 +786,30 @@ int main(int argc,char* args[])
 	{
 		if (!(archivo=fopen(args[1],"rt")))
 		{
-			printf("Archivo no encontrado.\n");
+			printf("Archivo no encontrado.");
+			system("pause");
 			exit(1);
 		}
-		while (t.compLex!=EOF){
-			sigLex();
-			printf("Lin %d: %s -> %d\n",numLinea,t.pe->lexema,t.compLex);
+		sigLex();
+		printf("Lin %d: %s -> %d\n",numLinea,t.pe->lexema,t.compLex);
+		while (t.compLex!=EOF)     
+        {   
+              vartoken=t.pe->lexema;         
+              result=expresion();          
+              //Imprime el resultado
+              if(i!=numLinea) {
+                   printf("Resultado linea %d=>>%.2f\n",numLinea-1,result);
+              }
+              i=numLinea;
+  		 	
 		}
-		fclose(archivo);
+		printf("Resultado linea %d=>>%.2f\n",numLinea,result);// imprime el ultimo resultado con su numero de linea
+		fclose(archivo);      
 	}else{
-		printf("Debe pasar como parametro el path al archivo fuente.\n");
+		printf("Debe pasar como parametro el path al archivo fuente.");
 		exit(1);
 	}
-
+    system("pause");
 	return 0;
 }
+
