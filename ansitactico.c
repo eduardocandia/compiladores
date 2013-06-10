@@ -1,9 +1,9 @@
 /*
- *	TAREA 1 Analizador lexico		
+ *	TAREA 2 Analizador Sintactico		
  *  Integrantes:
  *        - Eduardo Candia                                                  
  *        - Eva Rojas
- *	Implementar un analizador léxico que reconozca la gramatica de una calculadora
+ *
  */
 
 /*********** Librerias utilizadas **************/
@@ -16,98 +16,103 @@
 /***************** MACROS **********************/
 
 //Codigos
-#define PROGRAM		256
-#define TYPE		257
-#define VAR			258
-#define ARRAY		259
-#define BEGIN		260
-#define END			261
-#define PR_DO		262
-#define TO			263
-#define DOWNTO		264
-#define THEN		265
-#define OF			266
-#define FUNCTION	267
-#define PROCEDURE	268
-#define PR_INTEGER	269
-#define PR_REAL		270
-#define PR_BOOLEAN	271
-#define PR_CHAR		272
-#define PR_FOR		273
-#define PR_IF		274
-#define PR_ELSE		275
-#define PR_WHILE	276
-#define REPEAT		277
-#define UNTIL		278
-#define PR_CASE		279
-#define RECORD		280
-#define WRITELN		281
-#define WRITE		282
-#define CONST		283
-#define NUM			284
-#define ID			285
-#define BOOL		286
-#define CAR			287
-#define LITERAL		288
-#define NOT			289
-#define OPREL		290
-#define OPSUMA		291
-#define OPMULT		292
-#define OPASIGNA	293
-#define USER_TYPE	294
+#define VAR			256  //var
+#define PR_IF		257  // if 
+#define THEN		258  //then
+#define PR_ELSE		259  //else
+#define PR_FOR		260  //for
+#define TO			261  //to
+#define STEP		262  //step
+#define PR_DO		263  //do
+#define END			264  //end if, end for
+#define ST_WRITE    265  // write
+#define NUM			266  //numero
+#define ID			267  //identificador
+#define LITERAL		268  //literal "as"
+#define OPASIGNA	269  // =
+#define OPREL		270  // <=, >=, ==, < , >
+#define OPSUMA		271  //+,- 
+#define OPMULT		272  //*, /
+#define OPERLOGIC   273  // or and
+#define ST_WRITELN  274  // writeln
 // Fin Codigos
 #define TAMBUFF 	5
 #define TAMLEX 		50
 #define TAMHASH 	101
 
-/************* Definiciones ********************/
+/*******************Definiciones***********************/
+typedef enum {TRUE, FALSE} Error;
 
 typedef struct entrada{
 	//definir los campos de 1 entrada de la tabla de simbolos
 	int compLex;
-	char lexema[TAMLEX];	
-	struct entrada *tipoDato; // null puede representar variable no declarada	
+	char lexema[TAMLEX];	//es lo que apare en elcodigo 
+	struct entrada *tipoDato; // null puede representar variable no declarada, otra entrada la tabla de simbolos , no sera usado, por solo analizaremos lexicamente
 	// aqui irian mas atributos para funciones y procedimientos...
 	
 } entrada;
 
 typedef struct {
 	int compLex;
-	entrada *pe;
+	entrada *pe; //tabla de simbolos
 } token;
 
-/************* Variables globales **************/
 
+typedef enum 
+    // tokens de administracion
+   {ENDFILE,ERROR,
+    // palabras reservardas
+    VAR_,IF,THEN_,ELSE_,END_,FOR_,TO_,STEP_,DO_,WRITE,
+    // Tokens de caracteres multiples 
+    ID_,NUM_,
+    // Simbolos Especiales 
+    ASSIGN,EQ,LT,PLUS,MINUS,TIMES,OVER,LPAREN,RPAREN,SEMI
+   } TokenType;
+   
+typedef enum {Stmtk,ExpK} NodeKind; //enumeración es un conjunto de constantes enteras
+typedef enum {IfK, RepeatK, AssignK, WriteK} StmtKind;
+typedef enum {OpK, ConstK, IdK} ExpKind;
+typedef enum {Void, Integer, Boolean} ExpType;//será utilizadp para la verificación de tipos
+#define MAXCHILDREN 3
+
+typedef struct treeNode
+{
+    struct treeNode * child [MAXCHILDREN];
+    struct treeNode * sibling;
+    
+    int lineno;
+    NodeKind nodekind;
+    union {StmtKind stmt; ExpKind exp;}kind;
+    union {TokenType op; 
+          int val;
+          char * name; }attr;
+    ExpType type; //para verificacion de tipos de expresiones
+} TreeNode;
+
+/************* Variables globales **************/
 int consumir;			/* 1 indica al analizador lexico que debe devolver
 						el sgte componente lexico, 0 debe devolver el actual */
-
 char cad[5*TAMLEX];		// string utilizado para cargar mensajes de error
 token t;				// token global para recibir componentes del Analizador Lexico
-char *vartoken;           
-float result;           
 
 // variables para el analizador lexico
-char c=0;
-FILE *archivo;			// Fuente pascal
+FILE *archivo;			
 char buff[2*TAMBUFF];	// Buffer para lectura de archivo fuente
 char id[TAMLEX];		// Utilizado por el analizador lexico
 int delantero=-1;		// Utilizado por el analizador lexico
 int fin=0;				// Utilizado por el analizador lexico
 int numLinea=1;			// Numero de Linea
+Error HayError= FALSE;
 
 /************** Prototipos *********************/
-int sigLex();		// Del analizador Lexico
-
-float expresion();  
-float term();      
-float factor();    
+void sigLex();		
 
 /*********************HASH************************/
 entrada *tabla;				//declarar la tabla de simbolos
 int tamTabla=TAMHASH;		//utilizado para cuando se debe hacer rehash
 int elems=0;				//utilizado para cuando se debe hacer rehash
 
-int h(const char* k, int m)
+int h(char* k, int m)
 {
 	unsigned h=0,g;
 	int i;
@@ -122,7 +127,7 @@ int h(const char* k, int m)
 	return h%m;
 }
 void insertar(entrada e);
-/******Inicializa la tabla******/
+
 void initTabla()
 {	
 	int i=0;
@@ -152,7 +157,7 @@ int siguiente_primo(int n)
 	return n;
 }
 
-//En caso de que la tabla llegue al limite, duplicar el tamaño
+//en caso de que la tabla llegue al limite, duplicar el tamaño
 void rehash()
 {
 	entrada *vieja;
@@ -168,7 +173,7 @@ void rehash()
 	free(vieja);
 }
 
-//Insertar una entrada en la tabla
+//insertar una entrada en la tabla
 void insertar(entrada e)
 {
 	int pos;
@@ -184,8 +189,8 @@ void insertar(entrada e)
 	tabla[pos]=e;
 
 }
-//Busca una clave en la tabla, si no existe devuelve NULL, posicion en caso contrario
-entrada* buscar(const char *clave)
+//busca una clave en la tabla, si no existe devuelve NULL, posicion en caso contrario
+entrada* buscar(char *clave)
 {
 	int pos;
 	entrada *e;
@@ -199,7 +204,7 @@ entrada* buscar(const char *clave)
 	return &tabla[pos];
 }
 
-void insertTablaSimbolos(const char *s, int n)
+void insertTablaSimbolos(char *s, int n)
 {
 	entrada e;
 	sprintf(e.lexema,s);
@@ -211,78 +216,59 @@ void initTablaSimbolos()
 {
 	int i;
 	entrada pr,*e;
-	const char *vector[]={
-		"program",
-		"type",
-		"var",
-		"array",
-		"begin",
-		"end",
-		"do",
-		"to",
-		"downto",
-		"then",
-		"of",
-		"function",
-		"procedure", 
-		"integer", 
-		"real", 
-		"boolean", 
-		"char", 
-		"for", 
-		"if", 
-		"else", 
-		"while", 
-		"repeat", 
-		"until", 
-		"case", 
-		"record", 
-		"writeln",
-		"write",
-		"const"
-	};
- 	for (i=0;i<28;i++)
+	char *vector[]={
+	"var",
+    "if", 
+    "then", 
+    "else",
+	"for", 
+    "to", 
+    "step", 
+    "do",
+    "end",
+    "write"	
+  	};
+ 	for (i=0;i<10;i++)
 	{
 		insertTablaSimbolos(vector[i],i+256);
 	}
-	insertTablaSimbolos(",",',');
+    insertTablaSimbolos(",",',');
 	insertTablaSimbolos(".",'.');
-	insertTablaSimbolos(":",':');
 	insertTablaSimbolos(";",';');
 	insertTablaSimbolos("(",'(');
 	insertTablaSimbolos(")",')');
 	insertTablaSimbolos("[",'[');
 	insertTablaSimbolos("]",']');
-	insertTablaSimbolos("true",BOOL);
-	insertTablaSimbolos("false",BOOL);
-	insertTablaSimbolos("not",NOT);
 	insertTablaSimbolos("<",OPREL);
 	insertTablaSimbolos("<=",OPREL);
 	insertTablaSimbolos("<>",OPREL);
+	insertTablaSimbolos("==",OPREL);
 	insertTablaSimbolos(">",OPREL);
 	insertTablaSimbolos(">=",OPREL);
-	insertTablaSimbolos("=",OPREL);
+	insertTablaSimbolos("=",OPASIGNA);
 	insertTablaSimbolos("+",OPSUMA);
 	insertTablaSimbolos("-",OPSUMA);
 	insertTablaSimbolos("or",OPSUMA);
 	insertTablaSimbolos("*",OPMULT);
 	insertTablaSimbolos("/",OPMULT);
-	insertTablaSimbolos("div",OPMULT);
-	insertTablaSimbolos("mod",OPMULT);
-	insertTablaSimbolos(":=",OPASIGNA);
+	insertTablaSimbolos("and",OPERLOGIC);
+	insertTablaSimbolos("or",OPERLOGIC);
+ 	insertTablaSimbolos("writeln",ST_WRITELN);
+ 
+
 }
 
-/****** Rutinas del analizador lexico ******/
 
-void error(const char* mensaje)
+void error(char* mensaje)
 {
-	printf("Lin %d: Error Lexico. %s.\n",numLinea,mensaje);	
+	printf("Lin %d: %s==>'%s'\n",numLinea,mensaje,t.pe->lexema);
+    HayError=TRUE;	
 }
 
-int sigLex()
+void sigLex()
 {
 	int i=0, longid=0;
-
+	char c=0;
 	int acepto=0;
 	int estado=0;
 	char msg[41];
@@ -292,7 +278,8 @@ int sigLex()
 	{
 		
 		if (c==' ' || c=='\t')
-			continue;	//eliminar espacios en blanco
+			continue;//lleva  a la lectura de otro caracter	
+			//eliminar espacios en blanco
 		else if(c=='\n')
 		{
 			//incrementar el numero de linea
@@ -312,10 +299,11 @@ int sigLex()
 			}while(isalpha(c) || isdigit(c));
 			id[i]='\0';
 			if (c!=EOF)
-				ungetc(c,archivo);
+				ungetc(c,archivo);// devuelve al fuente al caracter
 			else
 				c=0;
-			t.pe=buscar(id);
+			//t es el token que estamos cargando
+			t.pe=buscar(id);// trata con  la tabla hash
 			t.compLex=t.pe->compLex;
 			if (t.pe->compLex==-1)
 			{
@@ -353,8 +341,8 @@ int sigLex()
 							id[++i]=c;
 							estado=3;
 						}
-						else{
-							estado=6;
+						else{ //cualquier otro caracter
+							estado=6;// terminal
 						}
 						break;
 					
@@ -365,7 +353,7 @@ int sigLex()
 							id[++i]=c;
 							estado=2;
 						}
-						else if(c=='.')
+						else if(c=='.') //exclusivo de pascal
 						{
 							i--;
 							fseek(archivo,-1,SEEK_CUR);
@@ -491,18 +479,18 @@ int sigLex()
 			}
 			break;
 		}
-		else if (c==':')
+		else if (c=='=')
 		{
-			//puede ser un : o un operador de asignacion
+		//puede ser un : o un operador de asignacion
 			c=fgetc(archivo);
-			if (c=='='){
-				t.compLex=OPASIGNA;
-				t.pe=buscar(":=");
+			if (c=='='){ // es operador de relacion == 
+				t.compLex=OPREL;
+				t.pe=buscar("==");
 			}
 			else{
 				ungetc(c,archivo);
-				t.compLex=':';
-				t.pe=buscar(":");
+				t.compLex=OPASIGNA;
+	     		t.pe=buscar("=");
 			}
 			break;
 		}
@@ -540,7 +528,7 @@ int sigLex()
                 }    
                             
             }
-            else{// verifica que sea un operador
+            else{
                ungetc(c,archivo); 	
                t.compLex=OPMULT;
 			   t.pe=buscar("/");
@@ -550,7 +538,7 @@ int sigLex()
 		}
 		else if (c=='=')
 		{
-			t.compLex=OPREL;
+			t.compLex=OPASIGNA;
 			t.pe=buscar("=");
 			break;
 		}
@@ -618,17 +606,17 @@ int sigLex()
 			t.pe=buscar("]");
 			break;
 		}
-		else if (c=='\'')
+		else if (c=='"')
 		{//un caracter o una cadena de caracteres
 			i=0;
 			id[i]=c;
 			i++;
 			do{
 				c=fgetc(archivo);
-				if (c=='\'')
+				if (c=='"')
 				{
 					c=fgetc(archivo);
-					if (c=='\'')
+					if (c=='"')
 					{
 						id[i]=c;
 						i++;
@@ -637,7 +625,7 @@ int sigLex()
 					}
 					else
 					{
-						id[i]='\'';
+						id[i]='"';
 						i++;
 						break;
 					}
@@ -661,25 +649,20 @@ int sigLex()
 			if (t.pe->compLex==-1)
 			{
 				sprintf(e.lexema,id);
-				if (strlen(id)==3 || strcmp(id,"''''")==0)
-					e.compLex=CAR;
-				else
-					e.compLex=LITERAL;
+				e.compLex=LITERAL;
 				insertar(e);
 				t.pe=buscar(id);
 				t.compLex=e.compLex;
 			}
 			break;
 		}
-		else if (c=='{')
+	   // el comentario e doble barra "//"	
+       else if (c=='/')
 		{
-			//elimina el comentario
-			while(c!=EOF)
-			{
-				c=fgetc(archivo);
-				if (c=='}')
-					break;
-			}
+         //elimina el comentario			
+           c=fgetc(archivo);	
+            if (c=='/') break;
+             
 			if (c==EOF)
 				error("Se llego al fin de archivo sin finalizar un comentario");
 		}
@@ -695,121 +678,217 @@ int sigLex()
 		sprintf(e.lexema,"EOF");
 		t.pe=&e;
 	}
-	return c;
+	
 }
-//sacar error
-void msgerror(void)
-{
-     fprintf(stderr,"Error al evaluar\n");
-     system("pause");
-     exit(1);
-}     
-//comparar cuando es un operador 
-void match(char expectedToken)
-{    
-     if(vartoken[0]==expectedToken){
-        sigLex();
-        vartoken=t.pe->lexema;
-        printf("Lin %d: %s -> %d\n",numLinea,t.pe->lexema,t.compLex);
+
+//prototipos
+void comparar(int);
+void lista_sentencias();
+void sentencia();
+void sent_asignacion();
+void expresion();
+void term();
+void simple_exp();
+void factor();
+void parse();
+void expresion_logica();
+void esarray();
+void sent_if ();
+void sen_for();
+void sent_declaracion();
+void sent_write();
+
+//funciones implementadas
+void comparar(int tokenEsperado){
+    if (t.compLex==tokenEsperado){
+        sigLex();   
+    }
+    else{
+        error(" no se esperaba el token ");
+    }
+}
+
+/*lista de sentencias*/
+void lista_sentencias(){
+    sentencia();
+    while ((t.compLex!=EOF) && 
+           (t.compLex!=END) && 
+           (t.compLex!=PR_ELSE))
+    {        
+        comparar(';');
+        if((t.compLex!=EOF) && 
+           (t.compLex!=END) && 
+           (t.compLex!=PR_ELSE)){
+               sentencia();                   
+        } 
+    }
+    
+}
+/*eleccion de sentencias */
+void sentencia(){
+    switch(t.compLex){    
+    case PR_IF: sent_if();break;
+    case PR_FOR: sen_for();break;
+    case VAR: sent_declaracion();break;
+    case ID : sent_asignacion();break;    
+    case ST_WRITE: sent_write();break;
+    case ST_WRITELN: sent_write();break;
+
+    default: error(" no se esperaba ");
+      sigLex();    
+      break;
+    }    
+}
+/*sentencia de asignaciion */
+void sent_asignacion(){
+    if(t.compLex==ID){
+        comparar(ID);
+        esarray();//si la variable es array
+        comparar(OPASIGNA);
+        expresion();        
+    }
+    
+}
+void expresion_logica(){
+     expresion();
+     if(t.compLex==OPERLOGIC){
+       comparar(OPERLOGIC);
+       expresion();        
+     }                                            
+}
+
+void expresion(){
+     simple_exp();
+    if (t.compLex==OPREL){
+       comparar(t.compLex);
+       simple_exp();       
+    }   
+}   
+void simple_exp(){
+    term();
+    //OPSUMA = +| -
+    while(t.compLex==OPSUMA){
+        comparar(t.compLex);
+        term();          
+    } 
+}
+void term(){
+     factor();
+     //OPMULT=*| /
+     while(t.compLex==OPMULT){
+       comparar(t.compLex);
+       factor();                  
      }
-     else msgerror();
+
 }
-//realizar suma o resta de terminos
-float expresion(){
-    float temp=term();
-    while(vartoken[0]=='+' || vartoken[0]=='-'){
-         if(vartoken[0]=='+')
-         {
-              match('+');
-              temp+=term();
-         }
-         else 
-         {
-             match('-');
-             temp-=term();
-         } 
-    }
-      return temp;
+void factor(){
+     switch(t.compLex){
+        case NUM:
+             comparar(NUM);
+             break;
+        case ID:
+             comparar(ID);
+             esarray();//nuevalinea
+             break;
+        case '(':
+             comparar('(');
+             expresion();     
+             comparar(')'); 
+             break;
+        default :
+           error(" no se esperaba ");   
+           sigLex();   
+           break;                                        
+      }     
+ }
+
+ void parse(){
+      sigLex();        
+      lista_sentencias();
+      
+ } 
+ 
+void esarray(){
+    if (t.compLex=='['){
+       comparar('[');
+       simple_exp();
+       comparar(']');            
+    }    
 }
-//comparar y realizar producto 0 cociente de factores
-float term()
-{
-    float temp=factor();
-    while(vartoken[0]=='*' || vartoken[0]=='/'){
-       if(vartoken[0]=='*')
-         {
-              match('*');
-              temp*=term();
-         }
-         else 
-         {
-             match('/');
-             temp/=term();
-         } 
-    }
-    return temp;
+void sent_if(){
+     comparar(PR_IF);
+     expresion_logica();
+     comparar(THEN);
+     lista_sentencias();
+     if(t.compLex==PR_ELSE){
+        comparar(PR_ELSE);
+        lista_sentencias();           
+     }
+     comparar(END);
+     comparar(PR_IF);
 }
-// verificar parentesis/numero
-float factor()
-{
-    int f;
-    char *aux;
-    float temp;
-    if (vartoken[0]=='(')
-    {
-       match('(');
-       temp=expresion();
-       match(')');
-    }
-    else if(isdigit(vartoken[0])){
-         temp=atof(vartoken);
-         sigLex();
-         vartoken=t.pe->lexema; 
-         printf("Lin %d: %s -> %d\n",numLinea,t.pe->lexema,t.compLex);
-    }
-    else{ 
-          msgerror();
-    }
-    return temp;
+void sen_for(){
+     comparar(PR_FOR);
+     sent_asignacion();
+     comparar(TO);
+     factor();     
+     comparar(STEP);
+     factor();
+     comparar(PR_DO);
+     lista_sentencias();
+     comparar(END);
+     comparar(PR_FOR);
+     
 }
-                    
+void sent_declaracion(){
+     comparar(VAR);
+     comparar(ID);
+     esarray();         
+     while(t.compLex==','){
+        comparar(',');
+        comparar(ID);
+        esarray();                        
+     }
+} 
+void sent_write(){
+     comparar(t.compLex);
+     comparar('(');
+     if(t.compLex==LITERAL){
+        comparar(LITERAL);                                           
+     }
+     else{
+        factor();
+     }
+     comparar(')');
+}
+//----------------------------PROGRAMA PRINCIPAL------------------------------------------
+
 int main(int argc,char* args[])
 {
-	// Inicializar variables para el analizador lexico y el evaluador de expresiones
-	int complex,i=0;
-	i=1;
-	float ver;
+	// inicializar analizador lexico
+	int complex=0;
+
 	initTabla();
 	initTablaSimbolos();
-	
-	if(argc > 1)
-	{
-		if (!(archivo=fopen(args[1],"rt")))
-		{
+
+         if(argc > 1)
+	     {
+		 if (!(archivo=fopen(args[1],"rt")))
+		 {
 			printf("Archivo no encontrado.");
-			system("pause");
 			exit(1);
-		}
-		sigLex();
-		printf("Lin %d: %s -> %d\n",numLinea,t.pe->lexema,t.compLex);
-		while (t.compLex!=EOF)     
-        {   
-              vartoken=t.pe->lexema;         
-              result=expresion();          
-              //Imprime el resultado
-              if(i!=numLinea) {
-                   printf("Resultado linea %d=>>%.2f\n",numLinea-1,result);
-              }
-              i=numLinea;
-  		 	
-		}
-		printf("Resultado linea %d=>>%.2f\n",numLinea,result);// imprime el ultimo resultado con su numero de linea
-		fclose(archivo);      
-	}else{
-		printf("Debe pasar como parametro el path al archivo fuente.");
-		exit(1);
-	}
-    system("pause");
-	return 0;
+		 }            //Funcion parse
+            parse();
+            if(HayError==FALSE){
+               printf("\nNo se encontraron errores\n");                                  
+            }
+            fclose(archivo);
+            system("pause");
+           	return 0;
+        }else{
+		 printf("Debe pasar como parametro el path al archivo fuente.");
+		 exit(1);
+	    }    
 }
+
 
